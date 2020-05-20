@@ -29,6 +29,10 @@ import os
 import time
 import math
 
+# Data Loading
+import pandas as pd
+import torchtext as tt
+
 
 from evaluation import *
 from models import *
@@ -216,6 +220,103 @@ def file_to_batches(filename, MAX_LENGTH, batch_size=5):
         batch_list.append([tensorA, tensorB, elt[2], elt[3]])
 
     return batch_list, MAX_LENGTH
+
+
+# These are some new methods which will re-implement functionality of the
+# original file.
+
+def createTokenDicts(filename):
+
+    wrd2idx = {}
+    idx2wrd = {}
+
+    with open(filename, 'r') as f:
+
+        for l in f:
+
+            parts = l.strip().split('\t')
+            wrd2idx[parts[0]] = int(parts[1])
+            idx2wrd[int(parts[1])] = parts[0]
+
+        return wrd2idx, idx2wrd
+
+
+def indexTokens(string, tokenizer):
+
+    return [tokenizer[word] for word in string]
+
+
+def createIterator(task, max_length, batch_size=5):
+    """ 
+    Turns a file of input data into a BucketIterator.
+
+    @param task: the task whose data we are loading.
+    @param max_length: maximum length of the input data.
+    @param batch_size: how many entries per batch.
+
+    @return: 4 x tt.data.BucketIterator (one for each split?)
+
+    We construct the iterator in two steps. First, we construct a DataSet
+    from the raw data, which will handle the construction of the tensors.
+    Then, we construct a BucketIterator from this DataSet. The BucketIterator
+    allows us to construct batches whose entries all have a similar length,
+    which is beneficial for training efficiency.
+
+    Note: This is a reimplementation of file_to_batches() above. As near as I
+    can tell, the MAX_LENGTH parameter for this original function is slightly
+    misleading, as it doesn't actually cap the length of any input data, but
+    rather *reports* what the max length ends up being. As 
+    such, we probably don't need to have it included as a parameter in this
+    implementaiton; however, until we get it done, I'll leave it in the param
+    list.
+
+    The general goal here is to attempt as near a drop-in replacement as 
+    possible, and then once that works we can modify how it works to make 
+    improvements to the interface.
+    """
+
+    # Instantiate tokenizer dictionaries
+    wrd2idx, idx2wrd = createTokenDicts('index.txt')
+
+    # Load the data from the file:
+    # We'll use pandas to load the tsv data into a dataframe. Bob mentioned to
+    # me that TorchText might have a way to automatically turn the files into
+    # a dataset, but I haven't investigated this. If there is a way, we can
+    # eliminate this step!
+
+    # Note that the original implementation works at the file level; this 
+    # works at the task level, so there is no need to construct the various
+    # batches separately.
+
+    trnFile = os.path.join('data', task + '.train')
+    tstFile = os.path.join('data', task + '.test')
+    devFile = os.path.join('data', task + '.dev')
+    genFile = os.path.join('data', task + '.gen')
+
+    # Let's illustrate this with the training data (repeat for the others)
+
+    trnDF = pd.DataFrame.from_csv(trnFile, sep='\t', names=['s1', 's2'])
+    trnDF = trnDF.assign(s1_tokens = lambda x: indexTokens(x.s1, wrd2idx))
+    trnDF = trnDF.assign(s2_tokens = lambda x: indexTokens(x.s2, wrd2idx))
+
+    # In order to use DataSet, we'll need to instantiate some Fields
+    # We'll also need to either (1) avoid using a tokenizer, or 
+    # (2) use the indexTokens() function as a provided tokenizer.
+    # I'm not certain how to declare the fields yet. If you figure it out,
+    # let me know! I haven't looked too hard at that piece of it yet.
+
+    trnData = None # Create the DataSet here
+
+    trnInterator = tt.BucketIterator(trnData, batch_size, sort_key = lambda x: len(x))
+
+    # Repeat this process for the other three splits.
+    tstIterator = None 
+    devIterator = None
+    genIterator = None
+
+
+    return (trnInterator, tstIterator, devIterator, genIterator)
+
 
 
 # Where the training actually happens

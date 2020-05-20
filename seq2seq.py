@@ -307,6 +307,9 @@ def createIterator(task, max_length, batch_size=5):
 
     trnData = None # Create the DataSet here
 
+    # BucketIterator is kinda like a wrapper around the dataset, with a defined
+    # sort key which lets the iterator group the data by length.
+
     trnInterator = tt.BucketIterator(trnData, batch_size, sort_key = lambda x: len(x))
 
     # Repeat this process for the other three splits.

@@ -29,6 +29,46 @@ if use_cuda:
 else:
     available_device = torch.device('cpu')
 
+
+def train_iterator(iterator, encoder, decoder, learning_rate=0.01):
+
+    # Construct optimizers and loss function
+    encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
+    decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
+    criterion = nn.NLLLoss()
+
+    # Loss values
+    total_loss = 0.0
+
+    # Iterate through iterator
+    for batch in iterator:
+
+        encoder_optimizer.zero_grad()
+        decoder_optimizer.zero_grad()
+
+        # Split the target from the input
+        target = batch[1]
+
+        # Forward pass
+
+        # I have some questions about how the Encoders are structured.
+        # In particular, why return a mega-tensor of the outputs?
+        e_out, e_hid, e_outs = encoder(batch)
+        d_outs = decoder(e_hid, e_att, batch)
+
+        batch_loss = 0.0
+        idx = 0
+        while idx < min(len(d_outs), len(batch)): # Make this less brittle?
+            batch_loss += criterion(d_outs[idx], batch[idx])
+
+        # Backward pass
+        # batch_loss *= batch[0][0].size()[1] # Why is this necessary??
+        batch_loss.backward()
+        encoder_optimizer.step()
+        decoder_optimizer.step()
+
+        total_loss += batch_loss / target.size()[0]
+
 # Train on a single batch, returning the average loss for
 # that batch
 def train(training_pair, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion, attention=False):
